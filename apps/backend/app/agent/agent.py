@@ -1,46 +1,53 @@
 from sqlalchemy.orm import Session
 
 from app.agent.intent import AgentAction, TaskIntent
-from app.agent.result import AgentProposal
+from app.agent.llm import LLM
+from app.agent.result import AgentProposal, AgentClarification, AgentResponse
 from app.services.task_service import create_task
 
-def understand(message: str) -> TaskIntent | None:
-    message = message.strip()
 
-    if message.lower().startswith("learn "):
-        title = message[6:].strip()
+class Agent:
+    def __init__(self, llm: LLM):
+        self.llm = llm
 
-        return TaskIntent(
-            action=AgentAction.CREATE_TASK,
-            title=title,
+    def understand(self, message: str) -> TaskIntent | None:
+        return self.llm.understand(message)
+
+    def propose(self, message: str) -> AgentResponse | None:
+        intent = self.understand(message)
+
+        if intent is None:
+            return None
+
+        if intent.needs_clarification:
+            return AgentResponse(
+                clarification=AgentClarification(
+                    question=intent.clarification_question
+                )
+            )
+
+        return AgentResponse(
+            proposal=AgentProposal(
+                intent=intent,
+                requires_approval=True,
+            )
         )
+    
+    def execute_proposal(
+        self,
+        db: Session,
+        proposal: AgentProposal,
+        approved: bool,
+    ):
+        if not approved:
+            return None
 
-    return None
+        if proposal.intent.action == AgentAction.CREATE_TASK:
+            return create_task(
+                db,
+                title=proposal.intent.title,
+                deadline=proposal.intent.deadline,
+            )
 
-def propose(message: str) -> AgentProposal | None:
-    intent = understand(message)
-
-    if intent is None:
         return None
 
-    return AgentProposal(
-        intent=intent,
-        requires_approval=True,
-    )
-
-def execute_proposal(
-    db: Session | None,
-    proposal: AgentProposal,
-    approved: bool,
-):
-    if not approved:
-        return None
-
-    if proposal.intent.action == AgentAction.CREATE_TASK:
-        return create_task(
-            db,
-            title=proposal.intent.title,
-            deadline=proposal.intent.deadline,
-        )
-
-    return None

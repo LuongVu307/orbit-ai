@@ -12,3 +12,5 @@ class TaskIntent(BaseModel):
     action: AgentAction
     title: str
     deadline: datetime | None = None
+    needs_clarification: bool = False
+    clarification_question: str | None = None

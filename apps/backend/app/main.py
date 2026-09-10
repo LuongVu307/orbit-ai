@@ -4,11 +4,12 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import AgentMessage, TaskCreate, AgentApproval
 from app.database.connection import get_db
-from app.agent.agent import execute_proposal, propose
+from app.agent.agent import Agent
+from app.agent.local_llm import LocalLLM
 from app.services.task_service import create_task, get_tasks, complete_task
 
 app = FastAPI(title="Orbit AI")
-
+agent = Agent(LocalLLM())
 
 @app.get("/")
 def root():
@@ -51,19 +52,19 @@ def complete_task_endpoint(
 
 @app.post("/agent/message")
 def agent_message(request: AgentMessage):
-    proposal = propose(request.message)
+    response = agent.propose(request.message)
 
-    if proposal is None:
+    if response is None:
         return {"error": "I could not understand the request"}
 
-    return proposal
+    return response
 
 @app.post("/agent/approve")
 def approve_agent_proposal(
     request: AgentApproval,
     db: Session = Depends(get_db),
 ):
-    task = execute_proposal(
+    task = agent.execute_proposal(
         db,
         request.proposal,
         approved=True,
