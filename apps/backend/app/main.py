@@ -2,8 +2,9 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.schemas import TaskCreate
+from app.api.schemas import AgentMessage, TaskCreate, AgentApproval
 from app.database.connection import get_db
+from app.agent.agent import execute_proposal, propose
 from app.services.task_service import create_task, get_tasks, complete_task
 
 app = FastAPI(title="Orbit AI")
@@ -45,5 +46,27 @@ def complete_task_endpoint(
 
     if task is None:
         return {"error": "Task not found"}
+
+    return task
+
+@app.post("/agent/message")
+def agent_message(request: AgentMessage):
+    proposal = propose(request.message)
+
+    if proposal is None:
+        return {"error": "I could not understand the request"}
+
+    return proposal
+
+@app.post("/agent/approve")
+def approve_agent_proposal(
+    request: AgentApproval,
+    db: Session = Depends(get_db),
+):
+    task = execute_proposal(
+        db,
+        request.proposal,
+        approved=True,
+    )
 
     return task
