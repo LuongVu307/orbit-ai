@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas import TaskCreate
 from app.database.connection import get_db
-from app.domain.task import Task
+from app.services.task_service import create_task, get_tasks
 
 app = FastAPI(title="Orbit AI")
 
@@ -20,21 +20,12 @@ def db_test(db: Session = Depends(get_db)):
     return {"database": result.scalar()}
 
 @app.post("/tasks")
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
-    new_task = Task(
-        title=task.title,
-        description=task.description,
-        priority=task.priority,
-        deadline=task.deadline,
-    )
-
-    db.add(new_task)
-    db.commit()
-    db.refresh(new_task)
-
-    return new_task
+def create_task_endpoint(
+    task: TaskCreate,
+    db: Session = Depends(get_db),
+):
+    return create_task(db, task)
 
 @app.get("/tasks")
-def get_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Task).all()
-    return tasks
+def get_tasks_endpoint(db: Session = Depends(get_db)):
+    return get_tasks(db)
