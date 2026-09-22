@@ -51,8 +51,11 @@ def complete_task_endpoint(
     return task
 
 @app.post("/agent/message")
-def agent_message(request: AgentMessage):
-    response = agent.propose(request.message)
+def agent_message(
+    request: AgentMessage,
+    db: Session = Depends(get_db),
+):
+    response = agent.handle_message(request.message, db)
 
     if response is None:
         return {"error": "I could not understand the request"}

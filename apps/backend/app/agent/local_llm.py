@@ -22,11 +22,15 @@ class LocalLLM(LLM):
                 You convert user requests into Orbit task intents.
 
                 Return ONLY valid JSON with these fields:
-                - action: "create_task"
-                - title: string
+                - action: "create_task" (optional)
+                - title: string or null
+                - description: string or null
+                - priority: "low", "medium", "high", or null
                 - deadline: ISO 8601 datetime or null
 
-                If the user is not asking to create a task, return null.
+                Extract only facts expressed in this message. A follow-up may
+                contain just one field, such as a deadline. If no task facts
+                can be extracted, return null.
                 """,
                     },
                     {
