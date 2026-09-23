@@ -1,5 +1,6 @@
 import requests
 import json
+from datetime import datetime, timedelta
 
 from app.agent.intent import TaskIntent
 from app.agent.llm import LLM
@@ -11,6 +12,16 @@ class LocalLLM(LLM):
         self.url = "http://localhost:11434/api/chat"
 
     def understand(self, message: str) -> TaskIntent | None:
+        now = datetime.now().astimezone()
+        current_datetime = now.isoformat()
+        upcoming_dates = "\n".join(
+            (now + timedelta(days=offset)).strftime("%A: %Y-%m-%d")
+            for offset in range(15)
+        )
+        nearest_weekdays = "\n".join(
+            (now + timedelta(days=offset)).strftime("%A: %Y-%m-%d")
+            for offset in range(1, 8)
+        )
         response = requests.post(
             self.url,
             json={
@@ -18,8 +29,18 @@ class LocalLLM(LLM):
                 "messages": [
                     {
                         "role": "system",
-                        "content": """
+                        "content": f"""
                 You convert user requests into Orbit task intents.
+
+                The current local date and time is {current_datetime}.
+                Resolve relative dates using this value.
+                Use this calendar when resolving named weekdays:
+                {upcoming_dates}
+
+                The nearest upcoming occurrence of each weekday is:
+                {nearest_weekdays}
+                When the user names a weekday without saying "next", use the
+                date in this nearest-upcoming list.
 
                 Return ONLY valid JSON with these fields:
                 - action: "create_task" (optional)
@@ -31,6 +52,12 @@ class LocalLLM(LLM):
                 Extract only facts expressed in this message. A follow-up may
                 contain just one field, such as a deadline. If no task facts
                 can be extracted, return null.
+
+                If the message contains no date, weekday, relative date, or
+                time expression, deadline MUST be null. Never invent a date.
+
+                Never infer a priority. Priority must be null unless the user
+                explicitly states a priority in the message.
                 """,
                     },
                     {
@@ -40,6 +67,7 @@ class LocalLLM(LLM):
                 ],
                 "format": "json",
                 "stream": False,
+                "options": {"temperature": 0},
             },
         )
 

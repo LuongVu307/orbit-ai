@@ -1,21 +1,19 @@
 import pytest
+from sqlalchemy.orm import Session
 
-from app.database.connection import SessionLocal
-from app.domain.task import Task
+from app.database.connection import engine
 
 
 @pytest.fixture
 def db():
-    session = SessionLocal()
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection)
 
     try:
         yield session
     finally:
-        session.rollback()
-
-        # Remove tasks created by tests.
-        session.query(Task).delete()
-        session.commit()
-
         session.close()
+        transaction.rollback()
+        connection.close()
 

@@ -42,6 +42,9 @@ class Agent:
             return None
 
         self._merge_intent(intent)
+        return self._response_for_current_draft()
+
+    def _response_for_current_draft(self) -> AgentResponse:
         missing_fields = self._missing_required_fields()
         if missing_fields:
             self.conversation.status = ConversationStatus.COLLECTING
@@ -104,9 +107,17 @@ class Agent:
             self.conversation.status = ConversationStatus.CANCELLED
             return AgentResponse(status=self.conversation.status)
 
+        intent = self.understand(message)
+        if intent is not None:
+            self._merge_intent(intent)
+            return self._response_for_current_draft()
+
         return AgentResponse(
             clarification=AgentClarification(
-                question="Please confirm or cancel the proposed task.",
+                question=(
+                    "Please confirm, cancel, or describe what you would like "
+                    "to change."
+                ),
                 missing_fields=[],
             ),
             status=self.conversation.status,

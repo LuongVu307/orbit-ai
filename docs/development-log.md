@@ -83,3 +83,22 @@ Do not treat an old development-log idea as a current requirement unless it is r
 
 - Before running backend commands, activate the project environment with
   `conda activate orbit-ai`.
+
+## 2026-09-23 — Desktop feedback-loop UI
+
+### What changed
+
+- Replaced the starter desktop screen with a chat-first Tauri UI for
+  clarification, proposal review, approval, cancellation, and modification.
+- Allowed a user message during confirmation to update the existing draft and
+  return it for renewed approval.
+- Added current-date context for local LLM deadline extraction.
+- Isolated database tests in rollback-only transactions so tests cannot delete
+  or persist production task data.
+
+### Testing
+
+- Verified the live API can reach PostgreSQL and read persisted tasks.
+- Verified a live draft can be clarified, modified, and cancelled without
+  creating a task.
+- Backend tests, desktop lint, and the desktop production build pass.

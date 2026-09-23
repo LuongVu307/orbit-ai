@@ -18,6 +18,10 @@ class FakeLLM(LLM):
             return TaskIntent(
                 deadline=datetime(2026, 9, 26, 18, tzinfo=timezone.utc),
             )
+        if message == "change it to Sunday morning":
+            return TaskIntent(
+                deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc),
+            )
         return None
 
 
@@ -66,6 +70,39 @@ def test_collecting_and_proposing_do_not_persist_a_task(db):
     agent.handle_message("Saturday evening", db)
 
     assert db.query(Task).count() == task_count_before
+
+
+def test_agent_updates_a_ready_proposal_without_persisting(db):
+    agent = Agent(FakeLLM())
+    task_count_before = db.query(Task).count()
+    agent.handle_message("learn Docker", db)
+    agent.handle_message("Saturday evening", db)
+
+    response = agent.handle_message("change it to Sunday morning", db)
+
+    assert response is not None
+    assert response.proposal is not None
+    assert response.proposal.draft_task.title == "learn Docker"
+    assert response.proposal.draft_task.deadline == datetime(
+        2026, 9, 27, 9, tzinfo=timezone.utc
+    )
+    assert response.status == ConversationStatus.READY_FOR_CONFIRMATION
+    assert db.query(Task).count() == task_count_before
+
+
+def test_approval_executes_the_modified_proposal(db):
+    agent = Agent(FakeLLM())
+    agent.handle_message("learn Docker", db)
+    agent.handle_message("Saturday evening", db)
+    agent.handle_message("change it to Sunday morning", db)
+
+    response = agent.handle_message("yes", db)
+
+    assert response is not None
+    assert response.executed_task_id is not None
+    task = db.get(Task, response.executed_task_id)
+    assert task is not None
+    assert task.deadline == datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
 
 
 def test_unapproved_proposal_does_not_execute():
