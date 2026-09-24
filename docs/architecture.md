@@ -198,11 +198,20 @@ These should not be treated as equivalent.
 ### Draft conversations
 
 While required task information is being gathered, the agent keeps an
-in-memory `ConversationState` containing a non-persisted `DraftTask`. Each
-message is extracted into facts and merged into that draft. The agent—not the
+in-progress `DraftTask` in a PostgreSQL-backed draft conversation. Each
+conversation has a UUID held by the desktop client. Each message is extracted
+into facts and merged into that conversation's draft. The agent—not the
 LLM—checks whether required fields are present and either requests the missing
-fields or creates a proposal. A draft is persisted only after explicit
-confirmation. Conversation persistence is intentionally deferred.
+fields or creates a proposal.
+
+Draft persistence does not make a draft an approved task. On approval, the
+backend locks and reads the stored conversation, creates the task, and marks
+the conversation executed in one transaction. Repeated approval returns the
+existing task rather than creating a duplicate.
+
+The UUID correlates and isolates local conversation state; it is not an
+authentication or authorization boundary. Orbit remains a single-user product
+at this stage. Full chat transcripts are not persisted.
 
 ## Approval boundary
 

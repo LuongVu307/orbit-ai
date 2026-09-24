@@ -12,6 +12,8 @@ def create_task(
     description: str | None = None,
     priority: TaskPriority = TaskPriority.MEDIUM,
     deadline: datetime | None = None,
+    *,
+    commit: bool = True,
 ) -> Task:
     task = Task(
         title=title,
@@ -21,8 +23,11 @@ def create_task(
     )
 
     db.add(task)
-    db.commit()
-    db.refresh(task)
+    if commit:
+        db.commit()
+        db.refresh(task)
+    else:
+        db.flush()
 
     return task
 

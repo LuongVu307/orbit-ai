@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
+const conversationStorageKey = 'orbit.activeConversationId'
 
 type DraftTask = {
   title: string | null
@@ -12,6 +13,7 @@ type DraftTask = {
 }
 
 type AgentResponse = {
+  conversation_id?: string | null
   proposal?: { draft_task: DraftTask; requires_approval: boolean } | null
   clarification?: { question: string; missing_fields: string[] } | null
   status?: string
@@ -34,6 +36,7 @@ function formatDeadline(deadline: string | null) {
 }
 
 function App() {
+  const restorationStarted = useRef(false)
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -42,11 +45,60 @@ function App() {
   ])
   const [input, setInput] = useState('')
   const [proposal, setProposal] = useState<DraftTask | null>(null)
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    localStorage.getItem(conversationStorageKey),
+  )
   const [isSending, setIsSending] = useState(false)
 
   const addAssistantMessage = (text: string) => {
     setMessages((current) => [...current, { role: 'assistant', text }])
   }
+
+  const clearConversation = () => {
+    localStorage.removeItem(conversationStorageKey)
+    setConversationId(null)
+    setProposal(null)
+  }
+
+  useEffect(() => {
+    if (!conversationId || restorationStarted.current) return
+    restorationStarted.current = true
+
+    const restoreConversation = async () => {
+      try {
+        const response = await fetch(
+          `${apiBaseUrl}/agent/conversations/${conversationId}`,
+        )
+        if (response.status === 404) {
+          clearConversation()
+          return
+        }
+
+        const data = (await response.json()) as AgentResponse
+        if (!response.ok) throw new Error('Orbit could not restore the draft.')
+
+        if (data.status === 'cancelled' || data.status === 'executed') {
+          clearConversation()
+          return
+        }
+        if (data.proposal) {
+          setProposal(data.proposal.draft_task)
+          addAssistantMessage('I restored your unfinished task for review.')
+        } else if (data.clarification) {
+          addAssistantMessage(
+            `I restored your unfinished task. ${data.clarification.question}`,
+          )
+        }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : 'Unable to reach Orbit.'
+        addAssistantMessage(text)
+      }
+    }
+
+    void restoreConversation()
+    // Restore only the conversation captured when the application starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const sendMessage = async (message: string) => {
     setMessages((current) => [...current, { role: 'user', text: message }])
@@ -56,12 +108,22 @@ function App() {
       const response = await fetch(`${apiBaseUrl}/agent/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, conversation_id: conversationId }),
       })
       const data = (await response.json()) as AgentResponse
 
       if (!response.ok || data.error) {
-        throw new Error(data.error ?? 'Orbit could not process that message.')
+        if (response.status === 404) clearConversation()
+        throw new Error(
+          data.error ??
+            (data as { detail?: string }).detail ??
+            'Orbit could not process that message.',
+        )
+      }
+
+      if (data.conversation_id) {
+        localStorage.setItem(conversationStorageKey, data.conversation_id)
+        setConversationId(data.conversation_id)
       }
 
       if (data.clarification) {
@@ -79,12 +141,12 @@ function App() {
       }
 
       if (data.status === 'cancelled') {
-        setProposal(null)
+        clearConversation()
         addAssistantMessage('Okay, I will not create that task.')
       }
 
       if (data.executed_task_id) {
-        setProposal(null)
+        clearConversation()
         addAssistantMessage(`Task created (ID ${data.executed_task_id}).`)
       }
     } catch (error) {

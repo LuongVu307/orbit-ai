@@ -1,34 +1,43 @@
 from datetime import datetime, timezone
+from uuid import UUID, uuid4
+
+import pytest
+from fastapi import HTTPException
 
 from app.agent.agent import Agent
-from app.agent.draft import ConversationStatus
+from app.agent.draft import ConversationState, ConversationStatus
 from app.agent.intent import AgentAction, TaskIntent
 from app.agent.llm import LLM
+from app.api.schemas import AgentApproval, AgentMessage
+from app.domain.conversation import DraftConversation
 from app.domain.task import Task
+from app.main import agent_message, approve_agent_proposal, get_agent_conversation
 
 
 class FakeLLM(LLM):
     def understand(self, message: str) -> TaskIntent | None:
         if message == "learn Docker":
-            return TaskIntent(
-                action=AgentAction.CREATE_TASK,
-                title="learn Docker",
-            )
+            return TaskIntent(action=AgentAction.CREATE_TASK, title="learn Docker")
+        if message == "write report":
+            return TaskIntent(action=AgentAction.CREATE_TASK, title="write report")
         if message == "Saturday evening":
             return TaskIntent(
-                deadline=datetime(2026, 9, 26, 18, tzinfo=timezone.utc),
+                deadline=datetime(2026, 9, 26, 18, tzinfo=timezone.utc)
             )
         if message == "change it to Sunday morning":
             return TaskIntent(
-                deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc),
+                deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
             )
         return None
 
 
-def test_understand_learn_task():
-    agent = Agent(FakeLLM())
+@pytest.fixture(autouse=True)
+def fake_api_agent(monkeypatch):
+    monkeypatch.setattr("app.main.agent", Agent(FakeLLM()))
 
-    intent = agent.understand("learn Docker")
+
+def test_understand_learn_task():
+    intent = Agent(FakeLLM()).understand("learn Docker")
 
     assert intent is not None
     assert intent.action == AgentAction.CREATE_TASK
@@ -36,22 +45,23 @@ def test_understand_learn_task():
 
 
 def test_agent_requests_only_the_missing_required_field():
-    agent = Agent(FakeLLM())
+    state = ConversationState()
 
-    response = agent.propose("learn Docker")
+    response = Agent(FakeLLM()).handle_message("learn Docker", state)
 
     assert response is not None
     assert response.proposal is None
     assert response.clarification is not None
     assert response.clarification.missing_fields == ["deadline"]
-    assert agent.conversation.status == ConversationStatus.COLLECTING
+    assert state.status == ConversationStatus.COLLECTING
 
 
-def test_agent_merges_follow_up_into_the_active_draft():
+def test_agent_merges_follow_up_into_the_supplied_draft():
     agent = Agent(FakeLLM())
-    agent.propose("learn Docker")
+    state = ConversationState()
+    agent.handle_message("learn Docker", state)
 
-    response = agent.propose("Saturday evening")
+    response = agent.handle_message("Saturday evening", state)
 
     assert response is not None
     assert response.proposal is not None
@@ -59,85 +69,120 @@ def test_agent_merges_follow_up_into_the_active_draft():
     assert response.proposal.draft_task.deadline == datetime(
         2026, 9, 26, 18, tzinfo=timezone.utc
     )
-    assert agent.conversation.status == ConversationStatus.READY_FOR_CONFIRMATION
+    assert state.status == ConversationStatus.READY_FOR_CONFIRMATION
 
 
-def test_collecting_and_proposing_do_not_persist_a_task(db):
+def test_agent_updates_a_ready_proposal():
     agent = Agent(FakeLLM())
-    task_count_before = db.query(Task).count()
+    state = ConversationState()
+    agent.handle_message("learn Docker", state)
+    agent.handle_message("Saturday evening", state)
 
-    agent.handle_message("learn Docker", db)
-    agent.handle_message("Saturday evening", db)
-
-    assert db.query(Task).count() == task_count_before
-
-
-def test_agent_updates_a_ready_proposal_without_persisting(db):
-    agent = Agent(FakeLLM())
-    task_count_before = db.query(Task).count()
-    agent.handle_message("learn Docker", db)
-    agent.handle_message("Saturday evening", db)
-
-    response = agent.handle_message("change it to Sunday morning", db)
+    response = agent.handle_message("change it to Sunday morning", state)
 
     assert response is not None
     assert response.proposal is not None
-    assert response.proposal.draft_task.title == "learn Docker"
     assert response.proposal.draft_task.deadline == datetime(
         2026, 9, 27, 9, tzinfo=timezone.utc
     )
     assert response.status == ConversationStatus.READY_FOR_CONFIRMATION
+
+
+def test_agent_confirmation_marks_state_without_creating_a_task(db):
+    agent = Agent(FakeLLM())
+    state = ConversationState()
+    agent.handle_message("learn Docker", state)
+    agent.handle_message("Saturday evening", state)
+    task_count_before = db.query(Task).count()
+
+    response = agent.handle_message("yes", state)
+
+    assert response is not None
+    assert response.status == ConversationStatus.CONFIRMED
+    assert state.status == ConversationStatus.CONFIRMED
     assert db.query(Task).count() == task_count_before
 
 
-def test_approval_executes_the_modified_proposal(db):
-    agent = Agent(FakeLLM())
-    agent.handle_message("learn Docker", db)
-    agent.handle_message("Saturday evening", db)
-    agent.handle_message("change it to Sunday morning", db)
+def test_conversation_is_persisted_and_restored(db):
+    created = agent_message(AgentMessage(message="learn Docker"), db)
+    conversation_id = created.conversation_id
 
-    response = agent.handle_message("yes", db)
+    assert isinstance(conversation_id, UUID)
+    db.expire_all()
+    assert db.get(DraftConversation, conversation_id) is not None
 
-    assert response is not None
-    assert response.executed_task_id is not None
-    task = db.get(Task, response.executed_task_id)
-    assert task is not None
-    assert task.deadline == datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
+    restored = get_agent_conversation(conversation_id, db)
 
-
-def test_unapproved_proposal_does_not_execute():
-    agent = Agent(FakeLLM())
-    agent.propose("learn Docker")
-    response = agent.propose("Saturday evening")
-
-    assert response is not None
-    assert response.proposal is not None
-    assert agent.execute_proposal(None, response.proposal, approved=False) is None
-    assert agent.conversation.status == ConversationStatus.CANCELLED
+    assert restored.conversation_id == conversation_id
+    assert restored.clarification is not None
+    assert restored.clarification.missing_fields == ["deadline"]
 
 
-def test_approved_proposal_creates_task(db):
-    agent = Agent(FakeLLM())
-    agent.propose("learn Docker")
-    response = agent.propose("Saturday evening")
+def test_conversations_are_isolated(db):
+    first = agent_message(AgentMessage(message="learn Docker"), db)
+    second = agent_message(AgentMessage(message="write report"), db)
 
-    assert response is not None
-    assert response.proposal is not None
-    task = agent.execute_proposal(db, response.proposal, approved=True)
+    agent_message(
+        AgentMessage(
+            conversation_id=first.conversation_id,
+            message="Saturday evening",
+        ),
+        db,
+    )
+    restored_second = get_agent_conversation(second.conversation_id, db)
 
-    assert task is not None
-    assert task.title == "learn Docker"
-    assert task.deadline == datetime(2026, 9, 26, 18, tzinfo=timezone.utc)
-    assert agent.conversation.status == ConversationStatus.EXECUTED
+    assert restored_second.clarification is not None
+    assert restored_second.clarification.missing_fields == ["deadline"]
+    assert restored_second.proposal is None
 
 
-def test_yes_executes_the_ready_proposal(db):
-    agent = Agent(FakeLLM())
-    agent.handle_message("learn Docker", db)
-    agent.handle_message("Saturday evening", db)
+def test_approval_is_idempotent_and_uses_stored_draft(db):
+    first = agent_message(AgentMessage(message="learn Docker"), db)
+    ready = agent_message(
+        AgentMessage(
+            conversation_id=first.conversation_id,
+            message="Saturday evening",
+        ),
+        db,
+    )
+    task_count_before = db.query(Task).count()
 
-    response = agent.handle_message("yes", db)
+    approved = approve_agent_proposal(
+        AgentApproval(conversation_id=ready.conversation_id), db
+    )
+    repeated = approve_agent_proposal(
+        AgentApproval(conversation_id=ready.conversation_id), db
+    )
 
-    assert response is not None
-    assert response.executed_task_id is not None
-    assert agent.conversation.status == ConversationStatus.EXECUTED
+    assert approved.executed_task_id == repeated.executed_task_id
+    assert db.query(Task).count() == task_count_before + 1
+
+
+def test_cancellation_does_not_create_a_task(db):
+    first = agent_message(AgentMessage(message="learn Docker"), db)
+    ready = agent_message(
+        AgentMessage(
+            conversation_id=first.conversation_id,
+            message="Saturday evening",
+        ),
+        db,
+    )
+    task_count_before = db.query(Task).count()
+
+    cancelled = agent_message(
+        AgentMessage(
+            conversation_id=ready.conversation_id,
+            message="cancel",
+        ),
+        db,
+    )
+
+    assert cancelled.status == ConversationStatus.CANCELLED
+    assert db.query(Task).count() == task_count_before
+
+
+def test_unknown_conversation_returns_not_found(db):
+    with pytest.raises(HTTPException) as error:
+        get_agent_conversation(uuid4(), db)
+
+    assert error.value.status_code == 404

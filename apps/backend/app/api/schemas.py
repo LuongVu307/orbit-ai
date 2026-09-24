@@ -1,11 +1,9 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.domain.task import TaskPriority
-from app.agent.result import AgentProposal
-
-
 class TaskCreate(BaseModel):
     title: str
     description: str | None = None
@@ -14,6 +12,7 @@ class TaskCreate(BaseModel):
 
 class AgentMessage(BaseModel):
     message: str
+    conversation_id: UUID | None = None
 
 class AgentApproval(BaseModel):
-    proposal: AgentProposal
+    conversation_id: UUID

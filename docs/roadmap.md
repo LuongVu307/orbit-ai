@@ -24,10 +24,10 @@ The current backlog export contains:
   - Priority: P2
 
 The initial domain model, stateful proposal flow, desktop review experience,
-and local agentic development workflow are implemented. The next Core Agent
-increment is persistent, session-scoped draft conversations. The existing
-process-global draft remains acceptable only for the current single-user,
-single-conversation prototype.
+local agentic development workflow, and persistent session-scoped draft
+conversations are implemented. Conversation UUIDs isolate local state and
+support restart recovery, but do not yet provide a multi-user security
+boundary.
 
 ## Product progression
 

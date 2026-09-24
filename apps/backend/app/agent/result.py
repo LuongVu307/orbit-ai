@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel
 
 from app.agent.draft import ConversationStatus, DraftTask
@@ -12,6 +14,7 @@ class AgentClarification(BaseModel):
     missing_fields: list[str]
 
 class AgentResponse(BaseModel):
+    conversation_id: UUID | None = None
     proposal: AgentProposal | None = None
     clarification: AgentClarification | None = None
     status: ConversationStatus

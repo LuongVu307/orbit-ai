@@ -79,6 +79,22 @@ A task may be associated with an external calendar event created for it.
 
 The external event is not the task itself.
 
+## Draft conversation
+
+A Draft Conversation represents one task capture flow before execution.
+
+```text
+Draft Conversation
+ ├── UUID
+ ├── Draft task facts
+ ├── Lifecycle status
+ └── Executed task reference, when approved
+```
+
+It is durable so unfinished work can survive a restart, but it is not itself a
+Task and does not imply approval. The desktop retains the active UUID. Chat
+transcripts are outside the MVP model.
+
 ## Goals
 
 Goals are part of the long-term product vision.

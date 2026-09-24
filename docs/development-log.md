@@ -125,3 +125,31 @@ Do not treat an old development-log idea as a current requirement unless it is r
   explicitly accepted constraint for the current single-user,
   single-conversation prototype and must be replaced with session-scoped
   persistence before concurrent or multi-user operation.
+
+## 2026-09-25 — Persistent draft conversations
+
+### What changed
+
+- Replaced process-global draft state with PostgreSQL-backed conversations.
+- Added client-held conversation UUIDs and restoration of unfinished drafts.
+- Made the agent stateless with respect to conversation lifecycle state.
+- Made approval operate on the stored draft with row locking and idempotent,
+  atomic task creation.
+- Added desktop persistence of the active conversation UUID without storing
+  full chat transcripts.
+
+### Decisions
+
+- A conversation UUID correlates local state but is not authentication.
+- Orbit remains single-user and local-use until an identity and authorization
+  model is explicitly introduced.
+
+### Testing
+
+- Added coverage for draft persistence, restoration, isolation, cancellation,
+  and repeated approval.
+- The mandatory `All` validation scope passed with 13 backend tests, desktop
+  lint/build, and `cargo check --locked`.
+- Bugbot's duplicate React Strict Mode restoration finding was fixed with an
+  idempotence guard. Security Review found no issues within the current threat
+  model.

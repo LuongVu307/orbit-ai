@@ -7,6 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from app.database.base import Base
+from app.domain.conversation import DraftConversation
 from app.domain.task import Task
 
 

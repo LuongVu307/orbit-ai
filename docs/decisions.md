@@ -100,3 +100,17 @@ persistence or a new domain table before recovery requirements are validated.
 
 **Consequence:** A restart loses an unfinished draft; a persisted conversation
 model can replace this boundary later.
+
+## D013 — Persist drafts by client-held conversation UUID
+
+**Decision:** Store each active task draft in PostgreSQL and address it with a
+UUID retained by the desktop client. Persist the draft and lifecycle state, but
+not the chat transcript.
+
+**Reason:** Drafts must survive restarts and must not share process-global
+state. A UUID is the smallest mechanism that supports restoration and isolated
+local conversations without introducing user accounts prematurely.
+
+**Consequence:** Approval operates on the server-stored draft and can be made
+idempotent. The UUID is state correlation, not authentication; Orbit remains
+single-user until an explicit identity and authorization model is introduced.
