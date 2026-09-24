@@ -102,3 +102,26 @@ Do not treat an old development-log idea as a current requirement unless it is r
 - Verified a live draft can be clarified, modified, and cancelled without
   creating a task.
 - Backend tests, desktop lint, and the desktop production build pass.
+
+## 2026-09-24 — Local agentic development workflow
+
+### What changed
+
+- Added versioned task, review, and handoff templates.
+- Added one non-rewriting validator for backend, desktop, and Tauri checks.
+- Isolated backend tests to a database whose name ends in `_test`.
+- Separated deterministic local-LLM tests from advisory live-model evaluation.
+
+### Testing
+
+- The mandatory `All` validation scope passed with 12 backend tests, desktop
+  lint/build, and `cargo check --locked`.
+- The advisory `gemma3` evaluation passed 3 of 6 cases; model-quality failures
+  remain non-blocking while the evaluation suite is advisory.
+
+### Known limitation
+
+- The backend still uses one process-global draft conversation. This is an
+  explicitly accepted constraint for the current single-user,
+  single-conversation prototype and must be replaced with session-scoped
+  persistence before concurrent or multi-user operation.

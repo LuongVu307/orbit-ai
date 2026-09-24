@@ -20,8 +20,14 @@ The current backlog export contains:
 
 - **Design Domain Model**
   - Type: Infrastructure
-  - Status: In progress
+  - Status: Done
   - Priority: P2
+
+The initial domain model, stateful proposal flow, desktop review experience,
+and local agentic development workflow are implemented. The next Core Agent
+increment is persistent, session-scoped draft conversations. The existing
+process-global draft remains acceptable only for the current single-user,
+single-conversation prototype.
 
 ## Product progression
 

@@ -1,7 +1,10 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-DATABASE_URL = "postgresql+psycopg://orbit:orbit@localhost:5432/orbit"
+DEFAULT_DATABASE_URL = "postgresql+psycopg://orbit:orbit@localhost:5432/orbit"
+DATABASE_URL = os.environ.get("ORBIT_DATABASE_URL", DEFAULT_DATABASE_URL)
 
 engine = create_engine(DATABASE_URL)
 

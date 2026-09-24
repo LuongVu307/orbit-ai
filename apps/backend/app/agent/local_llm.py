@@ -1,18 +1,31 @@
 import requests
 import json
 from datetime import datetime, timedelta
+from typing import Callable
 
 from app.agent.intent import TaskIntent
 from app.agent.llm import LLM
 
 
+PROMPT_VERSION = "1"
+
+
 class LocalLLM(LLM):
-    def __init__(self, model: str = "gemma3"):
+    def __init__(
+        self,
+        model: str = "gemma3",
+        *,
+        now_provider: Callable[[], datetime] | None = None,
+        request_timeout_seconds: float = 30,
+    ):
         self.model = model
         self.url = "http://localhost:11434/api/chat"
+        self.prompt_version = PROMPT_VERSION
+        self._now_provider = now_provider or (lambda: datetime.now().astimezone())
+        self.request_timeout_seconds = request_timeout_seconds
 
     def understand(self, message: str) -> TaskIntent | None:
-        now = datetime.now().astimezone()
+        now = self._now_provider()
         current_datetime = now.isoformat()
         upcoming_dates = "\n".join(
             (now + timedelta(days=offset)).strftime("%A: %Y-%m-%d")
@@ -69,15 +82,30 @@ class LocalLLM(LLM):
                 "stream": False,
                 "options": {"temperature": 0},
             },
+            timeout=self.request_timeout_seconds,
         )
 
         response.raise_for_status()
 
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError:
+            return None
 
-        content = data["message"]["content"]
+        if not isinstance(data, dict):
+            return None
+        message_data = data.get("message")
+        if not isinstance(message_data, dict):
+            return None
+        content = message_data.get("content")
+        if not isinstance(content, str):
+            return None
+        return self._parse_content(content)
+
+    @staticmethod
+    def _parse_content(content: str) -> TaskIntent | None:
         try:
             parsed = json.loads(content)
             return TaskIntent.model_validate(parsed)
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             return None

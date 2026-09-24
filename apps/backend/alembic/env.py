@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -13,6 +14,12 @@ from app.domain.task import Task
 # access to the values within the .ini file in use.
 config = context.config
 
+database_url = os.environ.get("ORBIT_DATABASE_URL")
+if database_url:
+    # Alembic uses ConfigParser interpolation, so literal percent signs in a
+    # URL must be escaped before assigning the option.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -22,7 +29,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = target_metadata = Base.metadata 
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
