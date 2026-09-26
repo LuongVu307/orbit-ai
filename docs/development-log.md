@@ -153,3 +153,33 @@ Do not treat an old development-log idea as a current requirement unless it is r
 - Bugbot's duplicate React Strict Mode restoration finding was fixed with an
   idempotence guard. Security Review found no issues within the current threat
   model.
+
+## 2026-09-26 — One-command local startup
+
+### What changed
+
+- Routed `npm run desktop` through a full local-stack launcher.
+- Added prerequisite checks, PostgreSQL readiness, automatic development
+  migrations, Ollama/model verification, FastAPI health checks, and Tauri
+  startup.
+- Moved Cargo's registry cache to `%LOCALAPPDATA%\orbit-cargo` to avoid crate
+  unpack failures on the repository filesystem.
+- Added exact service/port checks and cleanup limited to launcher-owned
+  processes.
+- Replaced the desktop's generic network failure with an actionable local API
+  message.
+
+### Testing
+
+- Verified startup with PostgreSQL and Ollama already running and FastAPI
+  stopped; the launcher applied migrations, started FastAPI, and opened Tauri.
+- Verified a live `gemma3` task request and cancelled its disposable draft.
+- Verified Ctrl+C removed only owned desktop/API processes and left PostgreSQL
+  and pre-existing Ollama running.
+- The mandatory `All` validation scope passed with 13 backend tests, desktop
+  lint/build, and `cargo check --locked`.
+
+### Next
+
+- Begin `ORBIT-0004`: expand real-world intent evaluation and harden the local
+  model prompt before adding calendar execution.

@@ -29,6 +29,11 @@ conversations are implemented. Conversation UUIDs isolate local state and
 support restart recovery, but do not yet provide a multi-user security
 boundary.
 
+The local development stack now has one-command startup, migration, health
+checking, and owned-process cleanup. The next Core Agent increment is
+`ORBIT-0004`: realistic intent evaluation and prompt hardening before calendar
+integration.
+
 ## Product progression
 
 ```text

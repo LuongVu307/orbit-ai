@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/run-orbit.ps1",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

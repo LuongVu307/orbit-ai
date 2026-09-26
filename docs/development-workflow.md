@@ -6,6 +6,26 @@ Orbit uses a local, human-gated development pipeline. A coding agent may plan, e
 
 The workflow complements `AGENTS.md`; it does not replace the product or architecture decisions in `docs/`.
 
+## Local application startup
+
+After installing project dependencies, start the complete local application
+from `apps/desktop`:
+
+```powershell
+npm.cmd run desktop
+```
+
+The launcher starts and awaits PostgreSQL, applies all pending Alembic
+migrations to the local `orbit` database, verifies Ollama and `gemma3`, starts
+FastAPI when necessary, and then starts Tauri. A healthy pre-existing Orbit API
+or Ollama service is reused. On exit, only API or Ollama processes created by
+the launcher are stopped; PostgreSQL and pre-existing services remain running.
+
+Running migrations during startup is intentional. Application models and the
+database schema must advance together, and `alembic upgrade head` is a no-op
+when the database is current. The launcher does not install tools, packages, or
+model weights.
+
 ## Task lifecycle
 
 1. Copy `dev-workflow/templates/task-spec-v1.md` into `dev-workflow/tasks/`.

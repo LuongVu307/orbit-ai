@@ -1,5 +1,38 @@
 # React + TypeScript + Vite
 
+## Run Orbit
+
+After `npm install`, run the native desktop application with:
+
+```powershell
+npm run desktop
+```
+
+Use `npm.cmd run desktop` if PowerShell blocks the `npm.ps1` wrapper.
+
+The command:
+
+- starts the Compose PostgreSQL service and waits for it
+- applies pending Alembic migrations to the local `orbit` database
+- starts Ollama if necessary and verifies that `gemma3` is installed
+- reuses a healthy Orbit API or starts an owned FastAPI process
+- configures the Rust MSVC toolchain and Cargo's local cache
+- starts Vite and the native Tauri application
+
+When the desktop exits, the launcher stops only the FastAPI or Ollama
+processes it started. It leaves pre-existing services and PostgreSQL running.
+The orchestrated FastAPI process does not use auto-reload; restart the desktop
+command after changing backend code.
+
+The launcher does not install dependencies or download model weights. If
+`gemma3` is missing, run:
+
+```powershell
+ollama pull gemma3
+```
+
+Use `npm run dev` when you only want the browser interface.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

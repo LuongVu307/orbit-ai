@@ -35,6 +35,13 @@ function formatDeadline(deadline: string | null) {
   }).format(new Date(deadline))
 }
 
+function formatRequestError(error: unknown) {
+  if (error instanceof TypeError) {
+    return 'Orbit\'s local API is unavailable. Restart Orbit and try again.'
+  }
+  return error instanceof Error ? error.message : 'Unable to reach Orbit.'
+}
+
 function App() {
   const restorationStarted = useRef(false)
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -90,8 +97,7 @@ function App() {
           )
         }
       } catch (error) {
-        const text = error instanceof Error ? error.message : 'Unable to reach Orbit.'
-        addAssistantMessage(text)
+        addAssistantMessage(formatRequestError(error))
       }
     }
 
@@ -150,8 +156,7 @@ function App() {
         addAssistantMessage(`Task created (ID ${data.executed_task_id}).`)
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to reach Orbit.'
-      addAssistantMessage(message)
+      addAssistantMessage(formatRequestError(error))
     } finally {
       setIsSending(false)
     }
