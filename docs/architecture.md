@@ -195,6 +195,32 @@ AI-generated proposal
 
 These should not be treated as equivalent.
 
+### Intent extraction boundary
+
+Local-model output is untrusted input. The model extracts candidate task facts,
+quotes the user text supporting each fact, and reports ambiguity. A
+deterministic validator then accepts only evidence present in the user's
+message. It resolves supported date and time expressions itself and discards
+unsupported deadlines, priorities, descriptions, and titles before anything is
+merged into the draft conversation.
+
+```text
+User message
+     ↓
+Untrusted structured extraction + quoted evidence
+     ↓
+Deterministic evidence and ambiguity validation
+     ↓
+Validated facts or a specific clarification
+     ↓
+Draft conversation
+```
+
+The production path and the advisory model-evaluation path share the same
+prompt, parser, and validator. Versioned evaluation cases use a fixed clock so
+relative-date results can be compared across prompt versions without making
+live-model quality a mandatory build gate.
+
 ### Draft conversations
 
 While required task information is being gathered, the agent keeps an

@@ -1,147 +1,120 @@
 import argparse
 import json
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 import requests
 
-from app.agent.intent import TaskIntent
-from app.agent.local_llm import LocalLLM
+from app.agent.local_llm import (
+    LEGACY_PROMPT_VERSION,
+    PROMPT_VERSION,
+    LocalLLM,
+)
+from evals.scoring import score_case, summarize_results
 
 
-@dataclass
-class EvaluationResult:
-    name: str
-    source: str
-    input: str
-    passed: bool
-    output: dict | None = None
-    error: str | None = None
+DEFAULT_CASES = Path(__file__).parent / "cases" / "intent-v1.json"
 
 
-def nearest_weekday(now: datetime, weekday: int) -> datetime:
-    days_ahead = (weekday - now.weekday()) % 7
-    if days_ahead == 0:
-        days_ahead = 7
-    return now + timedelta(days=days_ahead)
+def load_corpus(path: Path) -> dict:
+    corpus = json.loads(path.read_text(encoding="utf-8"))
+    if corpus.get("schema_version") != 1:
+        raise ValueError("Unsupported intent corpus schema version")
+    if not isinstance(corpus.get("cases"), list) or not corpus["cases"]:
+        raise ValueError("Intent corpus must contain at least one case")
+    return corpus
 
 
-def run_live_case(
-    llm: LocalLLM,
-    name: str,
-    message: str,
-    check: Callable[[TaskIntent], bool],
-) -> EvaluationResult:
-    try:
-        intent = llm.understand(message)
-        output = intent.model_dump(mode="json") if intent else None
-        return EvaluationResult(
-            name=name,
-            source="ollama",
-            input=message,
-            output=output,
-            passed=intent is not None and check(intent),
-        )
-    except (requests.RequestException, KeyError, TypeError, ValueError) as error:
-        return EvaluationResult(
-            name=name,
-            source="ollama",
-            input=message,
-            passed=False,
-            error=str(error),
-        )
-
-
-def run_evaluations(model: str) -> dict:
-    now = datetime.now().astimezone()
-    llm = LocalLLM(model=model, now_provider=lambda: now)
-    tomorrow = (now + timedelta(days=1)).date()
-    friday = nearest_weekday(now, 4).date()
-
-    cases = [
-        (
-            "relative_date",
-            "Revise Dijkstra tomorrow at 3pm",
-            lambda intent: (
-                intent.deadline is not None
-                and intent.deadline.date() == tomorrow
-                and intent.deadline.hour == 15
-            ),
-        ),
-        (
-            "named_weekday",
-            "Review algorithms Friday at 2pm",
-            lambda intent: (
-                intent.deadline is not None
-                and intent.deadline.date() == friday
-                and intent.deadline.hour == 14
-            ),
-        ),
-        (
-            "missing_deadline",
-            "Learn Docker",
-            lambda intent: (
-                intent.title is not None
-                and intent.description is None
-                and intent.priority is None
-                and intent.deadline is None
-            ),
-        ),
-        (
-            "explicit_priority",
-            "High priority: submit the lab tomorrow",
-            lambda intent: (
-                intent.title is not None
-                and intent.priority is not None
-                and intent.priority.value == "high"
-                and intent.deadline is not None
-                and intent.deadline.date() == tomorrow
-            ),
-        ),
-        (
-            "prohibited_inference",
-            "Read the operating systems paper",
-            lambda intent: (
-                intent.title is not None
-                and intent.description is None
-                and intent.deadline is None
-                and intent.priority is None
-            ),
-        ),
-    ]
-
-    results = [
-        run_live_case(llm, name, message, check)
-        for name, message, check in cases
-    ]
-    results.append(
-        EvaluationResult(
-            name="malformed_output",
-            source="adapter",
-            input="not JSON",
-            output=None,
-            passed=LocalLLM._parse_content("not JSON") is None,
-        )
+def run_evaluations(
+    model: str,
+    prompt_version: str,
+    cases_path: Path = DEFAULT_CASES,
+    limit: int | None = None,
+) -> dict:
+    corpus = load_corpus(cases_path)
+    fixed_now = datetime.fromisoformat(corpus["fixed_now"])
+    llm = LocalLLM(
+        model=model,
+        prompt_version=prompt_version,
+        now_provider=lambda: fixed_now,
     )
+    cases = corpus["cases"][:limit] if limit else corpus["cases"]
+    results = []
+
+    for case in cases:
+        try:
+            understanding = llm.understand(case["message"])
+            result = score_case(case, understanding)
+            result["error"] = None
+        except (requests.RequestException, KeyError, TypeError, ValueError) as error:
+            result = score_case(case, None)
+            result["passed"] = False
+            result["error"] = str(error)
+        results.append(result)
+
+    malformed = LocalLLM._parse_content(
+        "not JSON",
+        source_message="test",
+        prompt_version=prompt_version,
+    )
+    malformed_result = {
+        "name": "malformed_output",
+        "category": "adapter",
+        "input": "not JSON",
+        "passed": malformed is None,
+        "checks": [
+            {
+                "name": "safe_parse_failure",
+                "passed": malformed is None,
+                "expected": None,
+                "actual": (
+                    malformed.model_dump(mode="json")
+                    if malformed is not None
+                    else None
+                ),
+            }
+        ],
+        "output": None,
+        "prohibited_inferences": [],
+        "error": None,
+    }
+    results.append(malformed_result)
+    summary = summarize_results(results)
 
     return {
-        "evaluated_at": now.isoformat(),
+        "evaluated_at": datetime.now().astimezone().isoformat(),
+        "corpus": str(cases_path),
+        "corpus_schema_version": corpus["schema_version"],
+        "fixed_now": corpus["fixed_now"],
         "model": llm.model,
         "prompt_version": llm.prompt_version,
-        "passed": all(result.passed for result in results),
-        "results": [asdict(result) for result in results],
+        "passed": summary["passed"] == summary["total"],
+        "summary": summary,
+        "results": results,
     }
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run advisory live Ollama evaluations.")
+    parser = argparse.ArgumentParser(
+        description="Run advisory live Ollama intent evaluations."
+    )
     parser.add_argument("--model", default="gemma3")
+    parser.add_argument(
+        "--prompt-version",
+        choices=(LEGACY_PROMPT_VERSION, PROMPT_VERSION),
+        default=PROMPT_VERSION,
+    )
+    parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
+    parser.add_argument("--limit", type=int)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
-    report = run_evaluations(args.model)
+    report = run_evaluations(
+        args.model,
+        args.prompt_version,
+        args.cases,
+        args.limit,
+    )
     rendered = json.dumps(report, indent=2)
     print(rendered)
     if args.output:

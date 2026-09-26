@@ -1,6 +1,10 @@
 from datetime import datetime, timezone
 
-from app.agent.local_llm import LocalLLM, PROMPT_VERSION
+from app.agent.local_llm import (
+    LEGACY_PROMPT_VERSION,
+    PROMPT_VERSION,
+    LocalLLM,
+)
 
 
 class FakeResponse:
@@ -29,7 +33,7 @@ def test_local_llm_returns_none_for_malformed_response_envelope(monkeypatch):
         assert LocalLLM().understand("revise") is None
 
 
-def test_local_llm_uses_fixed_clock_and_timeout(monkeypatch):
+def test_local_llm_uses_evidence_fixed_clock_and_timeout(monkeypatch):
     captured_request = {}
 
     def fake_post(url, **kwargs):
@@ -39,8 +43,12 @@ def test_local_llm_uses_fixed_clock_and_timeout(monkeypatch):
             {
                 "message": {
                     "content": (
-                        '{"action":"create_task","title":"revise",'
-                        '"description":null,"priority":null,"deadline":null}'
+                        '{"action":"create_task","task_count":1,'
+                        '"title":"revise","title_evidence":"revise",'
+                        '"description":null,"description_evidence":null,'
+                        '"priority":null,"priority_evidence":null,'
+                        '"deadline":null,"deadline_evidence":null,'
+                        '"issues":[]}'
                     )
                 }
             }
@@ -53,12 +61,30 @@ def test_local_llm_uses_fixed_clock_and_timeout(monkeypatch):
         request_timeout_seconds=7,
     )
 
-    intent = llm.understand("revise")
+    understanding = llm.understand("revise")
 
-    assert intent is not None
-    assert intent.title == "revise"
+    assert understanding is not None
+    assert understanding.intent is not None
+    assert understanding.intent.title == "revise"
     assert captured_request["timeout"] == 7
     assert fixed_now.isoformat() in captured_request["json"]["messages"][0][
         "content"
     ]
+    assert "title_evidence" in captured_request["json"]["messages"][0]["content"]
+    assert captured_request["json"]["format"]["type"] == "object"
+    assert captured_request["json"]["options"] == {"temperature": 0}
     assert llm.prompt_version == PROMPT_VERSION
+
+
+def test_legacy_prompt_remains_available_for_baseline_comparison():
+    understanding = LocalLLM._parse_content(
+        (
+            '{"action":"create_task","title":"revise",'
+            '"description":null,"priority":null,"deadline":null}'
+        ),
+        prompt_version=LEGACY_PROMPT_VERSION,
+    )
+
+    assert understanding is not None
+    assert understanding.intent is not None
+    assert understanding.intent.title == "revise"

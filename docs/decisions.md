@@ -114,3 +114,19 @@ local conversations without introducing user accounts prematurely.
 **Consequence:** Approval operates on the server-stored draft and can be made
 idempotent. The UUID is state correlation, not authentication; Orbit remains
 single-user until an explicit identity and authorization model is introduced.
+
+## D014 — Validate model extraction against user evidence
+
+**Decision:** Treat local-model output as untrusted candidate data. Require
+source evidence for extracted task fields and pass it through deterministic
+validation before merging it into a draft.
+
+**Reason:** Prompt instructions alone cannot reliably prevent a model from
+inventing a deadline, priority, or other important fact. Orbit's
+ask-rather-than-assume principle requires an enforcement boundary outside the
+model.
+
+**Consequence:** Evidence metadata stays outside the task domain, supported
+date and time expressions are resolved deterministically, and ambiguity or
+multiple tasks produce clarification rather than silent selection. Production
+and advisory evaluation share the same extraction and validation path.

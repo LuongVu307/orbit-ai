@@ -30,9 +30,10 @@ support restart recovery, but do not yet provide a multi-user security
 boundary.
 
 The local development stack now has one-command startup, migration, health
-checking, and owned-process cleanup. The next Core Agent increment is
-`ORBIT-0004`: realistic intent evaluation and prompt hardening before calendar
-integration.
+checking, and owned-process cleanup. Intent extraction now uses versioned
+real-world evaluation, quoted source evidence, deterministic validation, and
+specific ambiguity handling. The next Core Agent increment has not yet been
+approved; it should be planned separately before calendar integration begins.
 
 ## Product progression
 

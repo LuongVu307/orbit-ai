@@ -1,5 +1,5 @@
 from app.agent.draft import ConversationState, ConversationStatus
-from app.agent.intent import TaskIntent
+from app.agent.intent import IntentIssue, TaskIntent, UnderstandingResult
 from app.agent.llm import LLM
 from app.agent.result import AgentClarification, AgentProposal, AgentResponse
 
@@ -12,7 +12,8 @@ class Agent:
         self.llm = llm
 
     def understand(self, message: str) -> TaskIntent | None:
-        return self.llm.understand(message)
+        result = self.llm.understand(message)
+        return result.intent if result else None
 
     def propose(
         self,
@@ -32,11 +33,14 @@ class Agent:
         if conversation.status in {ConversationStatus.CANCELLED, ConversationStatus.EXECUTED}:
             return AgentResponse(status=conversation.status)
 
-        intent = self.understand(message)
-        if intent is None:
+        understanding = self.llm.understand(message)
+        if understanding is None:
             return None
 
-        self._merge_intent(conversation, intent)
+        if understanding.intent is not None:
+            self._merge_intent(conversation, understanding.intent)
+        if understanding.issues:
+            return self._response_for_issues(conversation, understanding)
         return self.response_for_state(conversation)
 
     def response_for_state(self, conversation: ConversationState) -> AgentResponse:
@@ -77,11 +81,31 @@ class Agent:
             conversation.status = ConversationStatus.CANCELLED
             return AgentResponse(status=conversation.status)
 
-        intent = self.understand(message)
-        if intent is not None:
-            self._merge_intent(conversation, intent)
+        understanding = self.llm.understand(message)
+        if understanding is not None:
+            if understanding.intent is not None:
+                self._merge_intent(conversation, understanding.intent)
+            if understanding.issues:
+                confirmation_noise = {
+                    IntentIssue.UNSUPPORTED_REQUEST,
+                    IntentIssue.AMBIGUOUS_TITLE,
+                }
+                if (
+                    understanding.intent is None
+                    and IntentIssue.UNSUPPORTED_REQUEST
+                    in understanding.issues
+                    and set(understanding.issues) <= confirmation_noise
+                ):
+                    return self._confirmation_clarification(conversation)
+                return self._response_for_issues(conversation, understanding)
             return self.response_for_state(conversation)
 
+        return self._confirmation_clarification(conversation)
+
+    @staticmethod
+    def _confirmation_clarification(
+        conversation: ConversationState,
+    ) -> AgentResponse:
         return AgentResponse(
             clarification=AgentClarification(
                 question=(
@@ -89,6 +113,64 @@ class Agent:
                     "to change."
                 ),
                 missing_fields=[],
+            ),
+            status=conversation.status,
+        )
+
+    def _response_for_issues(
+        self,
+        conversation: ConversationState,
+        understanding: UnderstandingResult,
+    ) -> AgentResponse:
+        relevant_issues = list(understanding.issues)
+        if conversation.draft_task.title is not None:
+            relevant_issues = [
+                issue
+                for issue in relevant_issues
+                if issue != IntentIssue.AMBIGUOUS_TITLE
+            ]
+        if not relevant_issues:
+            return self.response_for_state(conversation)
+
+        priority = (
+            IntentIssue.MULTIPLE_TASKS,
+            IntentIssue.CONFLICTING_DETAILS,
+            IntentIssue.AMBIGUOUS_DEADLINE,
+            IntentIssue.AMBIGUOUS_PRIORITY,
+            IntentIssue.AMBIGUOUS_TITLE,
+            IntentIssue.UNSUPPORTED_REQUEST,
+        )
+        issue = next(item for item in priority if item in relevant_issues)
+        questions = {
+            IntentIssue.MULTIPLE_TASKS: (
+                "I found more than one task. Which one should we capture first?"
+            ),
+            IntentIssue.CONFLICTING_DETAILS: (
+                "I found conflicting details. Which option should I use?"
+            ),
+            IntentIssue.AMBIGUOUS_DEADLINE: (
+                "What exact date and time should I use for the deadline?"
+            ),
+            IntentIssue.AMBIGUOUS_PRIORITY: (
+                "What priority should I use: low, medium, or high?"
+            ),
+            IntentIssue.AMBIGUOUS_TITLE: (
+                "What task would you like me to capture?"
+            ),
+            IntentIssue.UNSUPPORTED_REQUEST: (
+                "I can capture one task at a time. What would you like to accomplish?"
+            ),
+        }
+        missing_fields = {
+            IntentIssue.AMBIGUOUS_DEADLINE: ["deadline"],
+            IntentIssue.AMBIGUOUS_PRIORITY: ["priority"],
+            IntentIssue.AMBIGUOUS_TITLE: ["title"],
+        }.get(issue, [])
+        conversation.status = ConversationStatus.COLLECTING
+        return AgentResponse(
+            clarification=AgentClarification(
+                question=questions[issue],
+                missing_fields=missing_fields,
             ),
             status=conversation.status,
         )

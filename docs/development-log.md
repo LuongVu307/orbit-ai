@@ -183,3 +183,52 @@ Do not treat an old development-log idea as a current requirement unless it is r
 
 - Begin `ORBIT-0004`: expand real-world intent evaluation and harden the local
   model prompt before adding calendar execution.
+
+## 2026-09-26 — Evidence-aware intent reliability
+
+### What changed
+
+- Added a versioned 36-case corpus covering complete tasks, partial follow-ups,
+  informal wording, typos, ambiguity, conflicts, multiple tasks, unsupported
+  requests, and prohibited inference.
+- Preserved prompt v1 as a baseline and added prompt v2 with source evidence,
+  explicit ambiguity signals, and an Ollama JSON schema.
+- Added deterministic validation that accepts only user-supported fields,
+  resolves supported dates and times outside the model, and asks targeted
+  clarification questions.
+- Kept extraction evidence outside the task domain and shared the same prompt,
+  parser, and validator between production and advisory evaluation.
+
+### Testing
+
+- Prompt v1 passed 8 of 37 checks (21.6%) and produced 17 prohibited
+  inferences against the expanded corpus and malformed-output adapter case.
+- Prompt v2 passed 29 of 37 checks (78.4%) and produced zero prohibited
+  inferences. Priority passed 30/30 field checks and deadline passed 29/30.
+- The deterministic backend suite passes with 44 tests, including regression
+  coverage for independent multi-task detection, daylight-saving transitions,
+  confirmation-state preservation, bounded relative dates, unlisted second
+  task verbs, and mixed conflicting date expressions.
+- Agent messages are limited to 4,000 characters, and conjunction validation
+  scans each clause once. The review stress case dropped from seconds to about
+  0.02 seconds in a direct local check.
+- Final independent Bugbot and security reviews found no actionable issues.
+
+### Known limitations
+
+- `gemma3` can still classify short valid tasks as unsupported and can omit or
+  shorten explicit context. Those failures are conservative: rejected data is
+  not merged into a draft.
+- Substantial clauses joined by `and` or `then` are conservatively treated as
+  multiple tasks unless they match a small set of established compound phrases.
+  This can ask for clarification on some coordinated-object wording, but avoids
+  silently collapsing two actions into one task.
+- The live model evaluation is advisory because local-model output and runtime
+  vary. Deterministic validation remains the required build gate.
+
+### Next
+
+- Use real personal conversations to extend the corpus before changing models
+  or adding broader language heuristics.
+- Plan the next Core Agent increment separately before starting calendar
+  execution work.

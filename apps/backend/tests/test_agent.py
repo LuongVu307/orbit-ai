@@ -6,27 +6,66 @@ from fastapi import HTTPException
 
 from app.agent.agent import Agent
 from app.agent.draft import ConversationState, ConversationStatus
-from app.agent.intent import AgentAction, TaskIntent
+from app.agent.intent import (
+    AgentAction,
+    IntentIssue,
+    TaskIntent,
+    UnderstandingResult,
+)
 from app.agent.llm import LLM
-from app.api.schemas import AgentApproval, AgentMessage
+from app.api.schemas import (
+    MAX_AGENT_MESSAGE_LENGTH,
+    AgentApproval,
+    AgentMessage,
+)
 from app.domain.conversation import DraftConversation
 from app.domain.task import Task
 from app.main import agent_message, approve_agent_proposal, get_agent_conversation
 
 
 class FakeLLM(LLM):
-    def understand(self, message: str) -> TaskIntent | None:
+    def understand(self, message: str) -> UnderstandingResult | None:
         if message == "learn Docker":
-            return TaskIntent(action=AgentAction.CREATE_TASK, title="learn Docker")
+            return UnderstandingResult(
+                intent=TaskIntent(
+                    action=AgentAction.CREATE_TASK,
+                    title="learn Docker",
+                )
+            )
         if message == "write report":
-            return TaskIntent(action=AgentAction.CREATE_TASK, title="write report")
+            return UnderstandingResult(
+                intent=TaskIntent(
+                    action=AgentAction.CREATE_TASK,
+                    title="write report",
+                )
+            )
         if message == "Saturday evening":
-            return TaskIntent(
-                deadline=datetime(2026, 9, 26, 18, tzinfo=timezone.utc)
+            return UnderstandingResult(
+                intent=TaskIntent(
+                    deadline=datetime(2026, 9, 26, 18, tzinfo=timezone.utc)
+                )
             )
         if message == "change it to Sunday morning":
-            return TaskIntent(
-                deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
+            return UnderstandingResult(
+                intent=TaskIntent(
+                    deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
+                )
+            )
+        if message == "buy milk and revise":
+            return UnderstandingResult(issues=[IntentIssue.MULTIPLE_TASKS])
+        if message == "Sunday at 9am":
+            return UnderstandingResult(
+                intent=TaskIntent(
+                    deadline=datetime(2026, 9, 27, 9, tzinfo=timezone.utc)
+                ),
+                issues=[IntentIssue.AMBIGUOUS_TITLE],
+            )
+        if message == "maybe":
+            return UnderstandingResult(
+                issues=[
+                    IntentIssue.UNSUPPORTED_REQUEST,
+                    IntentIssue.AMBIGUOUS_TITLE,
+                ]
             )
         return None
 
@@ -101,6 +140,53 @@ def test_agent_confirmation_marks_state_without_creating_a_task(db):
     assert response.status == ConversationStatus.CONFIRMED
     assert state.status == ConversationStatus.CONFIRMED
     assert db.query(Task).count() == task_count_before
+
+
+def test_unsupported_confirmation_reply_preserves_ready_state():
+    agent = Agent(FakeLLM())
+    state = ConversationState()
+    agent.handle_message("learn Docker", state)
+    agent.handle_message("Saturday evening", state)
+
+    response = agent.handle_message("maybe", state)
+
+    assert response is not None
+    assert response.clarification is not None
+    assert response.status == ConversationStatus.READY_FOR_CONFIRMATION
+    assert state.status == ConversationStatus.READY_FOR_CONFIRMATION
+
+    confirmed = agent.handle_message("yes", state)
+    assert confirmed is not None
+    assert confirmed.status == ConversationStatus.CONFIRMED
+
+
+def test_agent_asks_specific_question_for_multiple_tasks():
+    response = Agent(FakeLLM()).handle_message(
+        "buy milk and revise",
+        ConversationState(),
+    )
+
+    assert response is not None
+    assert response.clarification is not None
+    assert response.clarification.question == (
+        "I found more than one task. Which one should we capture first?"
+    )
+    assert response.status == ConversationStatus.COLLECTING
+
+
+def test_follow_up_does_not_reask_for_title_already_in_draft():
+    agent = Agent(FakeLLM())
+    state = ConversationState()
+    agent.handle_message("learn Docker", state)
+
+    response = agent.handle_message("Sunday at 9am", state)
+
+    assert response is not None
+    assert response.proposal is not None
+    assert response.proposal.draft_task.title == "learn Docker"
+    assert response.proposal.draft_task.deadline == datetime(
+        2026, 9, 27, 9, tzinfo=timezone.utc
+    )
 
 
 def test_conversation_is_persisted_and_restored(db):
@@ -186,3 +272,8 @@ def test_unknown_conversation_returns_not_found(db):
         get_agent_conversation(uuid4(), db)
 
     assert error.value.status_code == 404
+
+
+def test_agent_message_rejects_oversized_input():
+    with pytest.raises(ValueError):
+        AgentMessage(message="x" * (MAX_AGENT_MESSAGE_LENGTH + 1))

@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "fixed_now": "2026-09-26T10:00:00+01:00",
+  "cases": [
+    {
+      "name": "relative_date",
+      "category": "complete",
+      "message": "Revise Dijkstra tomorrow at 3pm",
+      "expected": {
+        "intent": {"title": "Revise Dijkstra", "deadline": "2026-09-27T15:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "named_weekday",
+      "category": "complete",
+      "message": "Review algorithms Friday at 2pm",
+      "expected": {
+        "intent": {"title": "Review algorithms", "deadline": "2026-10-02T14:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "high_priority",
+      "category": "priority",
+      "message": "High priority: submit the lab tomorrow at 5pm",
+      "expected": {
+        "intent": {"title": "submit the lab", "priority": "high", "deadline": "2026-09-27T17:00:00+01:00"},
+        "null_fields": ["description"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "low_priority",
+      "category": "priority",
+      "message": "Low priority: email the tutor Monday at 9am",
+      "expected": {
+        "intent": {"title": "email the tutor", "priority": "low", "deadline": "2026-09-28T09:00:00+01:00"},
+        "null_fields": ["description"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "medium_priority",
+      "category": "priority",
+      "message": "Plan the demo Friday at noon, medium priority",
+      "expected": {
+        "intent": {"title": "Plan the demo", "priority": "medium", "deadline": "2026-10-02T12:00:00+01:00"},
+        "null_fields": ["description"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "missing_deadline",
+      "category": "missing",
+      "message": "Learn Docker",
+      "expected": {
+        "intent": {"title": "Learn Docker"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "no_inference",
+      "category": "prohibited_inference",
+      "message": "Read the operating systems paper",
+      "expected": {
+        "intent": {"title": "Read the operating systems paper"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "polite_request",
+      "category": "informal",
+      "message": "Can you remind me to call the dentist Monday at 9am?",
+      "expected": {
+        "intent": {"title": "call the dentist", "deadline": "2026-09-28T09:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "informal_request",
+      "category": "informal",
+      "message": "gotta send the invoice Tuesday at 4pm",
+      "expected": {
+        "intent": {"title": "send the invoice", "deadline": "2026-09-29T16:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "typo",
+      "category": "typo",
+      "message": "submt coursework tomorrow at 11am",
+      "expected": {
+        "intent": {"title": "submt coursework", "deadline": "2026-09-27T11:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "month_date",
+      "category": "date_format",
+      "message": "Prepare slides 4 October at 14:00",
+      "expected": {
+        "intent": {"title": "Prepare slides", "deadline": "2026-10-04T14:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "iso_date",
+      "category": "date_format",
+      "message": "File the report on 2026-10-05 at 09:30",
+      "expected": {
+        "intent": {"title": "File the report", "deadline": "2026-10-05T09:30:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "uk_numeric_date",
+      "category": "date_format",
+      "message": "Call the bank on 04/10/2026 at 2pm",
+      "expected": {
+        "intent": {"title": "Call the bank", "deadline": "2026-10-04T14:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "deadline_only",
+      "category": "follow_up",
+      "message": "Tomorrow at 3pm",
+      "expected": {
+        "intent": {"deadline": "2026-09-27T15:00:00+01:00"},
+        "null_fields": ["description", "priority", "title"],
+        "required_issues": ["ambiguous_title"]
+      }
+    },
+    {
+      "name": "priority_only",
+      "category": "follow_up",
+      "message": "High priority",
+      "expected": {
+        "intent": {"priority": "high"},
+        "null_fields": ["description", "deadline", "title"],
+        "required_issues": ["ambiguous_title"]
+      }
+    },
+    {
+      "name": "later",
+      "category": "ambiguous",
+      "message": "Finish the report later",
+      "expected": {
+        "intent": {"title": "Finish the report"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "weekend",
+      "category": "ambiguous",
+      "message": "Finish the report this weekend",
+      "expected": {
+        "intent": {"title": "Finish the report"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "conflicting_dates",
+      "category": "conflict",
+      "message": "Submit the lab Tuesday or Wednesday at 3pm",
+      "expected": {
+        "intent": {"title": "Submit the lab"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["conflicting_details"]
+      }
+    },
+    {
+      "name": "date_without_time",
+      "category": "ambiguous",
+      "message": "Call Sam Friday",
+      "expected": {
+        "intent": {"title": "Call Sam"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "time_without_date",
+      "category": "ambiguous",
+      "message": "Call Sam at 4pm",
+      "expected": {
+        "intent": {"title": "Call Sam"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "two_tasks",
+      "category": "multiple_tasks",
+      "message": "Buy milk tomorrow at 6pm and revise Dijkstra Friday at 2pm",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["multiple_tasks"]
+      }
+    },
+    {
+      "name": "two_tasks_without_dates",
+      "category": "multiple_tasks",
+      "message": "Email Alex and clean the kitchen",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["multiple_tasks"]
+      }
+    },
+    {
+      "name": "greeting",
+      "category": "unsupported",
+      "message": "How are you?",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["unsupported_request"]
+      }
+    },
+    {
+      "name": "weather",
+      "category": "unsupported",
+      "message": "What is the weather like?",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["unsupported_request"]
+      }
+    },
+    {
+      "name": "vague_correction",
+      "category": "follow_up",
+      "message": "change it to Sunday morning",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "exact_correction",
+      "category": "follow_up",
+      "message": "change it to Sunday at 9am",
+      "expected": {
+        "intent": {"deadline": "2026-09-27T09:00:00+01:00"},
+        "null_fields": ["description", "priority", "title"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "explicit_context",
+      "category": "description",
+      "message": "Draft the report using the survey notes by Monday at 10am",
+      "expected": {
+        "intent": {
+          "title": "Draft the report",
+          "description": "using the survey notes",
+          "deadline": "2026-09-28T10:00:00+01:00"
+        },
+        "null_fields": ["priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "conflicting_priorities",
+      "category": "conflict",
+      "message": "High and low priority: submit the form tomorrow at 9am",
+      "expected": {
+        "intent": {"title": "submit the form", "deadline": "2026-09-27T09:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": ["conflicting_details"]
+      }
+    },
+    {
+      "name": "not_urgent",
+      "category": "prohibited_inference",
+      "message": "Read chapter four, it is not urgent",
+      "expected": {
+        "intent": {"title": "Read chapter four"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "urgent_without_priority",
+      "category": "prohibited_inference",
+      "message": "Urgently call the landlord tomorrow at 8am",
+      "expected": {
+        "intent": {"title": "call the landlord", "deadline": "2026-09-27T08:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "in_three_days",
+      "category": "relative_date",
+      "message": "Renew the subscription in 3 days at 1pm",
+      "expected": {
+        "intent": {"title": "Renew the subscription", "deadline": "2026-09-29T13:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "whenever",
+      "category": "ambiguous",
+      "message": "Organise my notes whenever",
+      "expected": {
+        "intent": {"title": "Organise my notes"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    },
+    {
+      "name": "long_context",
+      "category": "description",
+      "message": "For the research project, prepare the ethics form using Maya's comments by Thursday at 4pm",
+      "expected": {
+        "intent": {
+          "title": "prepare the ethics form",
+          "description": "using Maya's comments",
+          "deadline": "2026-10-01T16:00:00+01:00"
+        },
+        "null_fields": ["priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "schedule_wording",
+      "category": "informal",
+      "message": "Please schedule time to review my CV tomorrow at 6pm",
+      "expected": {
+        "intent": {"title": "review my CV", "deadline": "2026-09-27T18:00:00+01:00"},
+        "null_fields": ["description", "priority"],
+        "required_issues": []
+      }
+    },
+    {
+      "name": "cancel_without_active_proposal",
+      "category": "unsupported",
+      "message": "cancel that",
+      "expected": {
+        "intent": null,
+        "null_fields": [],
+        "required_issues": ["unsupported_request"]
+      }
+    },
+    {
+      "name": "sometime_next_week",
+      "category": "ambiguous",
+      "message": "Review the budget sometime next week",
+      "expected": {
+        "intent": {"title": "Review the budget"},
+        "null_fields": ["description", "priority", "deadline"],
+        "required_issues": ["ambiguous_deadline"]
+      }
+    }
+  ]
+}
